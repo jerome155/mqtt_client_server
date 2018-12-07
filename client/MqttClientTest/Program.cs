@@ -7,16 +7,18 @@ using System.Text;
 using System.Threading.Tasks;
 using MQTTnet;
 using MQTTnet.Client;
-using MQTTnet.Exceptions;
-using MQTTnet.Extensions.ManagedClient;
+using MQTTnet.Diagnostics;
 using MQTTnet.Protocol;
 using MQTTnet.Serializer;
 
 namespace MqttClientTest
 {
+    using System.Runtime.CompilerServices;
+
     static class Program
     {
-        private static readonly IMqttClient MqttClient = new MqttFactory().CreateMqttClient();
+        private static IMqttClient MqttClient = new MqttFactory().CreateMqttClient();
+        private static int _msgCounter;
 
         private static void Main(string[] args)
         {
@@ -29,8 +31,8 @@ namespace MqttClientTest
         private static void AttachEventDelegates()
         {
             MqttClient.ApplicationMessageReceived += MqttClientOnApplicationMessageReceived;
-            MqttClient.Connected += MqttClientOnConnected;
-            MqttClient.Disconnected += MqttClientOnDisconnected;
+            //MqttClient.Connected += MqttClientOnConnected;
+            //MqttClient.Disconnected += MqttClientOnDisconnected;
         }
 
         
@@ -53,8 +55,8 @@ namespace MqttClientTest
 
         private static void MqttClientOnConnected(object sender, MqttClientConnectedEventArgs e)
         {
-            Console.WriteLine("Client connected: " + e.IsSessionPresent);
-            //SubscribeToTopic();
+            //Console.WriteLine("Client connected: " + e.IsSessionPresent);
+            //SubscribeToTopic(string.Empty);
         }
 
         private static void ShutdownClient()
@@ -83,7 +85,7 @@ namespace MqttClientTest
                 switch (input)
                 {
                     case "Subscribe":
-                        SubscribeToTopic();
+                        SubscribeToTopic().Wait();
                         break;
                     case "Unsubscribe":
                         UnsubscribeClient();
@@ -91,47 +93,63 @@ namespace MqttClientTest
                     case "Connect":
                         ConnectClient();
                         break;
+                    case "SendMessage":
+                        SendMessage();
+                        break;
                     case "Disconnect":
                         DisconnectClient();
                         break;
                     case "Shutdown":
                         return;
                 }
+
+                //if (input.StartsWith("Subscribe"))
+                //{
+                //    SubscribeToTopic(input.Substring(input.Length - 1, 1));
+                //}
             }
 
         }
 
-        private static void SubscribeToTopic()
+        private static void SendMessage()
         {
-            MqttClient.SubscribeAsync(new List<TopicFilter> { new TopicFilterBuilder().WithTopic("MainTopic").WithExactlyOnceQoS().Build()});
-            Console.WriteLine("Subscribed to Topic.");
+            _msgCounter++;
+            MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                .WithTopic($"/MainTopic")
+                .WithPayload(DateTime.Now + ": TestMessage " + _msgCounter)
+                .WithExactlyOnceQoS()
+                .Build()).Wait();
+        }
+
+        private static async Task SubscribeToTopic()
+        {
+            try
+            {
+                IMqttClientOptions mqttClientOptions = new MqttClientOptionsBuilder()
+                    .WithClientId("RealClient")
+                    .WithTcpServer("localhost", 1884)
+                    .WithCleanSession(false)
+                    .WithKeepAlivePeriod(TimeSpan.FromMilliseconds(-1))
+                    .Build();
+
+                await MqttClient.ConnectAsync(mqttClientOptions);
+                await MqttClient.SubscribeAsync("MainTopic", MqttQualityOfServiceLevel.ExactlyOnce);
+
+                Console.WriteLine("Subscribed to Topic.");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+ 
         }
 
         private static async void ConnectClient()
         {
-            IMqttClientOptions mqttClientOptions = new MqttClientOptionsBuilder()
-                .WithClientId("RealClient")
-                .WithTcpServer("localhost", 1884)
-                .WithKeepAlivePeriod(TimeSpan.FromMilliseconds(-1))
-                .WithProtocolVersion(MqttProtocolVersion.V311)
-                .Build();
-
-            IManagedMqttClientOptions managedMqttClientOptions = new ManagedMqttClientOptionsBuilder()
-                .WithAutoReconnectDelay(TimeSpan.FromSeconds(5))
-                .WithClientOptions(mqttClientOptions)
-                .Build();
-            
-
-            try
-            {
-                await MqttClient.ConnectAsync(mqttClientOptions);
-            }
-            catch
-            {
-            }
         }
 
-        private static void MqttClientOnApplicationMessageReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
+        private static async void MqttClientOnApplicationMessageReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
         {
             Console.WriteLine("Message received: " + Encoding.UTF8.GetString(e.ApplicationMessage.Payload));
         }

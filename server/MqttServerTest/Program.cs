@@ -16,7 +16,6 @@ namespace MqttServerTest
         private static IMqttServer _mqttServer;
         //private static IMqttServerOptions _mqttServerOptions;
         //private static readonly IMqttClient MqttClient = new MqttFactory().CreateMqttClient();
-        private static RetainedMessageHandler _retainedMsgHandler = new RetainedMessageHandler();
         private const string MqttTopic = "MainTopic";
 
         private static void Main(string[] args)
@@ -92,7 +91,6 @@ namespace MqttServerTest
             opt.DefaultEndpointOptions.Port = 1884;
             opt.DefaultEndpointOptions.IsEnabled = true;
             opt.ConnectionValidator = c => c.ReturnCode = MqttConnectReturnCode.ConnectionAccepted;
-            opt.Storage = _retainedMsgHandler;
 
             await _mqttServer.StartAsync(opt);
 
@@ -140,7 +138,6 @@ namespace MqttServerTest
                 _msgCounter++;
                 await _mqttServer.PublishAsync(new MqttApplicationMessageBuilder()
                     .WithTopic(MqttTopic)
-                    .WithRetainFlag()
                     .WithPayload(DateTime.Now + ": TestMessage "  + _msgCounter)
                     .WithExactlyOnceQoS()
                     .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.ExactlyOnce)

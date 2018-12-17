@@ -1,11 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using MQTTnet;
-using MQTTnet.Client;
-using MQTTnet.Diagnostics;
 using MQTTnet.Protocol;
 using MQTTnet.Server;
 
@@ -88,7 +82,7 @@ namespace MqttServerTest
             opt.PendingMessagesOverflowStrategy = MqttPendingMessagesOverflowStrategy.DropOldestQueuedMessage;
             opt.EnablePersistentSessions = true;
             opt.MaxPendingMessagesPerClient = 1000;
-            opt.DefaultEndpointOptions.Port = 1884;
+            opt.DefaultEndpointOptions.Port = 1883;
             opt.DefaultEndpointOptions.IsEnabled = true;
             opt.ConnectionValidator = c => c.ReturnCode = MqttConnectReturnCode.ConnectionAccepted;
 

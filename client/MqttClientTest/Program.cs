@@ -23,7 +23,7 @@ namespace MqttClientTest
             //ConnectClient();
             AttachEventDelegates();
             RunClient();
-            ShutdownClient();
+            ShutdownClient().Wait();
         }
 
         private static void AttachEventDelegates()
@@ -50,22 +50,21 @@ namespace MqttClientTest
         private static void MqttClientOnConnected(object sender, MqttClientConnectedEventArgs e)
         {
             Console.WriteLine("Client connected: " + e.IsSessionPresent);
-            //await SubscribeToTopic(string.Empty);
         }
 
-        private static void ShutdownClient()
+        private static async Task ShutdownClient()
         {
-            UnsubscribeClient();
-            DisconnectClient();
+            await UnsubscribeClient();
+            await DisconnectClient();
         }
 
-        private static async void UnsubscribeClient()
+        private static async Task UnsubscribeClient()
         {
             await MqttClient.UnsubscribeAsync(new List<string> { "/MainTopic" });
             Console.WriteLine("Unsubscribed Client.");
         }
 
-        private static async void DisconnectClient()
+        private static async Task DisconnectClient()
         {
             await MqttClient.DisconnectAsync();
         }
@@ -82,17 +81,17 @@ namespace MqttClientTest
                         SubscribeToTopic(topic).Wait();
                         break;
                     case "Unsubscribe":
-                        UnsubscribeClient();
+                        UnsubscribeClient().Wait();
                         break;
                     case "Connect":
                         string address = Console.ReadLine();
-                        ConnectClient(address);
+                        ConnectClient(address).Wait();
                         break;
                     case "SendMessage":
                         SendMessage();
                         break;
                     case "Disconnect":
-                        DisconnectClient();
+                        DisconnectClient().Wait();
                         break;
                     case "Shutdown":
                         return;
@@ -139,7 +138,7 @@ namespace MqttClientTest
  
         }
 
-        private static async void ConnectClient(String address)
+        private static async Task ConnectClient(String address)
         {
             try
             {
@@ -156,8 +155,6 @@ namespace MqttClientTest
             {
                 Console.WriteLine(ex.ToString());
             }
-
-            //await SubscribeToTopic("/MainTopic");
         }
 
         private static void MqttClientOnApplicationMessageReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
@@ -169,7 +166,7 @@ namespace MqttClientTest
                 {
                     string outString = message.Substring(message.IndexOf(observerVariable));
                     outString = outString.Substring(outString.IndexOf("\"value\":"));
-                    outString = outString.Substring(outString.IndexOf(":"), outString.IndexOf("}")- outString.IndexOf(":"));
+                    outString = outString.Substring(outString.IndexOf(":")+1, outString.IndexOf("}")- outString.IndexOf(":")-1);
                     Console.WriteLine("Value of " + observerVariable + ": " + outString);
                 }
             }

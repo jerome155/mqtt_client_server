@@ -9,7 +9,13 @@ using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Diagnostics;
 using MQTTnet.Protocol;
+#if MQTTNET3
+using MQTTnet.Client.Connecting;
+using MQTTnet.Client.Disconnecting;
+using MQTTnet.Client.Options;
+#else
 using MQTTnet.Serializer;
+#endif
 
 namespace MqttClientTest
 {
@@ -28,12 +34,18 @@ namespace MqttClientTest
 
         private static void AttachEventDelegates()
         {
+#if MQTTNET3
+
+            MqttClient.UseApplicationMessageReceivedHandler(e => MqttClientOnApplicationMessageReceived(null, e));
+            MqttClient.UseConnectedHandler(e => MqttClientOnConnected(null, e));
+            MqttClient.UseDisconnectedHandler(e => MqttClientOnDisconnected(null, e));
+#else
             MqttClient.ApplicationMessageReceived += MqttClientOnApplicationMessageReceived;
             MqttClient.Connected += MqttClientOnConnected;
             MqttClient.Disconnected += MqttClientOnDisconnected;
+#endif
+
         }
-
-
 
         private static void MqttClientOnDisconnected(object sender, MqttClientDisconnectedEventArgs e)
         {
@@ -49,7 +61,11 @@ namespace MqttClientTest
 
         private static void MqttClientOnConnected(object sender, MqttClientConnectedEventArgs e)
         {
+#if MQTTNET3
+            Console.WriteLine("Client connected: " + e.AuthenticateResult.ResultCode);
+#else
             Console.WriteLine("Client connected: " + e.IsSessionPresent);
+#endif
         }
 
         private static async Task ShutdownClient()
@@ -60,7 +76,7 @@ namespace MqttClientTest
 
         private static async Task UnsubscribeClient()
         {
-            await MqttClient.UnsubscribeAsync(new List<string> { "/MainTopic" });
+            await MqttClient.UnsubscribeAsync(new string[] { "/MainTopic" });
             Console.WriteLine("Unsubscribed Client.");
         }
 
@@ -144,7 +160,7 @@ namespace MqttClientTest
             {
                 IMqttClientOptions mqttClientOptions = new MqttClientOptionsBuilder()
                     .WithClientId("RealClient")
-                    .WithTcpServer(address, 1884)
+                    .WithTcpServer(address, 1883)
                     .WithCleanSession(false)
                     .WithKeepAlivePeriod(TimeSpan.FromMilliseconds(-1))
                     .Build();

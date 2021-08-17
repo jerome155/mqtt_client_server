@@ -6,7 +6,7 @@ using MQTTnet.Server;
 using MQTTnet.Server.Status;
 #endif
 
-namespace MqttServerTest
+namespace MqttServer
 {
     static class Program
     {

@@ -9,6 +9,8 @@ using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Diagnostics;
 using MQTTnet.Protocol;
+using Newtonsoft.Json.Linq;
+using System.IO;
 #if MQTTNET3
 using MQTTnet.Client.Connecting;
 using MQTTnet.Client.Disconnecting;
@@ -23,13 +25,33 @@ namespace MqttClientTest
     {
         private static IMqttClient MqttClient = new MqttFactory().CreateMqttClient();
         private static int _msgCounter;
+        private static List<string> _subscriptionList = new List<string>();
+
+        private static bool observerActive = false;
+        private static bool checkActive = false;
+        private static string observerVariable;
+        private static string helpText = "Commands: Subscribe, Unsubscribe, Connect, Disconnect, SendMessage, SendInvalidMessage, Shutdown, StartObservation, StopObservation, StartCheck, StopCheck, Help";
 
         private static void Main(string[] args)
         {
             //ConnectClient();
+            PrintAsciiArt();
             AttachEventDelegates();
+            Console.WriteLine(helpText);
             RunClient();
             ShutdownClient().Wait();
+        }
+
+        private static void PrintAsciiArt()
+        {
+            Console.WriteLine(" /$$      /$$  /$$$$$$  /$$$$$$$$   /$$$$$$$$        /$$$$$$   /$$ /$$                       /$$        ");
+            Console.WriteLine("| $$$    /$$$ /$$__  $$| __  $$__ /|__  $$__ /       /$$__  $$| $$| __/                    | $$         ");
+            Console.WriteLine("| $$$$  /$$$$| $$  \\ $$    | $$       | $$         | $$  \\__ /| $$ /$$  /$$$$$$  /$$$$$$$  /$$$$$$    ");
+            Console.WriteLine("| $$ $$/$$ $$| $$  | $$    | $$       | $$         | $$       | $$| $$ /$$__  $$| $$__  $$| _  $$_ /    ");
+            Console.WriteLine("| $$  $$$| $$| $$  | $$    | $$       | $$         | $$       | $$| $$| $$$$$$$$| $$  \\ $$   | $$      ");
+            Console.WriteLine("| $$\\  $ | $$| $$/$$ $$    | $$       | $$         | $$    $$ | $$| $$| $$_____/| $$  | $$   | $$ /$$  ");
+            Console.WriteLine("| $$ \\/  | $$|  $$$$$$/    | $$       | $$         |  $$$$$$/ | $$| $$|  $$$$$$$| $$  | $$   |  $$$$   ");
+            Console.WriteLine("|__/     |__/ \\____ $$$    |__/       |__/          \\______/  |__/|__/ \\_______/|__/  |__/    \\___/ ");                                                                                                                                      
         }
 
         private static void AttachEventDelegates()
@@ -76,8 +98,12 @@ namespace MqttClientTest
 
         private static async Task UnsubscribeClient()
         {
-            await MqttClient.UnsubscribeAsync(new string[] { "/MainTopic" });
-            Console.WriteLine("Unsubscribed Client.");
+            foreach (var topic in _subscriptionList)
+            {
+                await MqttClient.UnsubscribeAsync(new string[] { topic });
+                Console.WriteLine("Unsubscribed from topic " + topic);
+            }
+            _subscriptionList.Clear();
         }
 
         private static async Task DisconnectClient()
@@ -93,40 +119,67 @@ namespace MqttClientTest
                 switch (input)
                 {
                     case "Subscribe":
+                    case "subscribe":
                         string topic = Console.ReadLine();
                         SubscribeToTopic(topic).Wait();
                         break;
                     case "Unsubscribe":
+                    case "unsubscribe":
                         UnsubscribeClient().Wait();
                         break;
                     case "Connect":
+                    case "connect":
                         string address = Console.ReadLine();
                         ConnectClient(address).Wait();
                         break;
                     case "SendMessage":
+                    case "sendmessage":
+                    case "sendMessage":
                         SendMessage();
                         break;
+                    case "SendInvalidMessage":
+                    case "sendinvalidMessage":
+                    case "sendInvalidMessage":
+                        SendInvalidMessage();
+                        break;
                     case "Disconnect":
+                    case "disconnect":
                         DisconnectClient().Wait();
                         break;
                     case "Shutdown":
+                    case "shutdown":
                         return;
                     case "StartObservation":
+                    case "startobservation":
+                    case "startObservation":
                         string variable = Console.ReadLine();
                         observerActive = true;
                         observerVariable = variable;
                         break;
                     case "StopObservation":
+                    case "stopobservation":
+                    case "stopObservation":
                         observerActive = false;
+                        break;
+                    case "StartCheck":
+                    case "startCheck":
+                    case "startcheck":
+                        checkActive = true;
+                        break;
+                    case "StopCheck":
+                    case "stopCheck":
+                    case "stopcheck":
+                        checkActive = false;
+                        break;
+                    case "Help":
+                    case "help":
+                        Console.WriteLine(helpText);
                         break;
                 }
 
             }
 
         }
-
-        private static bool observerActive = false;
-        private static string observerVariable;
        
 
         private static void SendMessage()
@@ -139,11 +192,22 @@ namespace MqttClientTest
                 .Build()).Wait();
         }
 
+        private static void SendInvalidMessage()
+        {
+            _msgCounter++;
+            MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                .WithTopic("/MainTopic")
+                .WithPayload(Message.InvalidMessage)
+                .WithExactlyOnceQoS()
+                .Build()).Wait();
+        }
+
         private static async Task SubscribeToTopic(string topic)
         {
             try
             {
                 await MqttClient.SubscribeAsync(topic, MqttQualityOfServiceLevel.ExactlyOnce);
+                _subscriptionList.Add(topic);
 
                 Console.WriteLine("Subscribed to Topic.");
             }
@@ -163,6 +227,7 @@ namespace MqttClientTest
                     .WithTcpServer(address, 1883)
                     .WithCleanSession(false)
                     .WithKeepAlivePeriod(TimeSpan.FromMilliseconds(-1))
+                    .WithCommunicationTimeout(TimeSpan.FromSeconds(20))
                     .Build();
 
                 await MqttClient.ConnectAsync(mqttClientOptions);
@@ -175,9 +240,9 @@ namespace MqttClientTest
 
         private static void MqttClientOnApplicationMessageReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
         {
+            string message = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
             if (observerActive)
             {
-                string message = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
                 if (message.Contains(observerVariable))
                 {
                     string outString = message.Substring(message.IndexOf(observerVariable));
@@ -186,9 +251,24 @@ namespace MqttClientTest
                     Console.WriteLine("Value of " + observerVariable + ": " + outString);
                 }
             }
+            else if (checkActive)
+            {
+                try
+                {
+                    JObject.Parse(message);
+                }
+                catch (Exception ex)
+                {
+                    string outString = ex.Message;
+                    Console.WriteLine(DateTime.Now + ": Error detected in message: " + outString);
+                    var write = new StreamWriter(Path.Combine(Environment.CurrentDirectory, DateTime.Now.Ticks + ".json"));
+                    write.Write(message);
+                    write.Close();
+                }
+            }
             else
             {
-                Console.WriteLine("Message received: " + Encoding.UTF8.GetString(e.ApplicationMessage.Payload));
+                Console.WriteLine(message);
             }
         }
     }
